@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
   <title>Daily Task Manager</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -28,7 +28,8 @@
       background: var(--bg);
       color: var(--text);
       min-height: 100vh;
-      padding: 2rem 1rem;
+      padding: 1.25rem .875rem;
+      -webkit-tap-highlight-color: transparent;
     }
 
     .app {
@@ -37,20 +38,18 @@
     }
 
     /* ── Header ── */
-    header {
-      margin-bottom: 1.75rem;
-    }
+    header { margin-bottom: 1.5rem; }
 
     header h1 {
-      font-size: 1.75rem;
+      font-size: 1.5rem;
       font-weight: 700;
       letter-spacing: -0.5px;
     }
 
     header p {
       color: var(--muted);
-      font-size: .9rem;
-      margin-top: .25rem;
+      font-size: .85rem;
+      margin-top: .2rem;
     }
 
     /* ── Add Task Card ── */
@@ -58,52 +57,65 @@
       background: var(--surface);
       border-radius: var(--radius);
       box-shadow: var(--shadow);
-      padding: 1.25rem;
-      margin-bottom: 1.25rem;
+      padding: 1rem;
+      margin-bottom: 1rem;
     }
 
     .add-card h2 {
-      font-size: .85rem;
+      font-size: .8rem;
       font-weight: 600;
       text-transform: uppercase;
       letter-spacing: .05em;
       color: var(--muted);
-      margin-bottom: .75rem;
+      margin-bottom: .65rem;
     }
 
+    /* Mobile-first: stacked by default */
     .input-row {
       display: flex;
+      flex-direction: column;
       gap: .5rem;
     }
 
     .input-row input {
-      flex: 1;
-      padding: .65rem .9rem;
+      width: 100%;
+      padding: .75rem .9rem;
       border: 1.5px solid var(--border);
       border-radius: 8px;
-      font-size: .95rem;
+      font-size: 1rem;        /* 16px — prevents iOS zoom */
       outline: none;
       transition: border-color .15s;
+      -webkit-appearance: none;
     }
 
     .input-row input:focus { border-color: var(--primary); }
-
     .input-row input::placeholder { color: var(--muted); }
 
     .btn-add {
-      padding: .65rem 1.1rem;
+      width: 100%;
+      padding: .75rem 1.1rem;
       background: var(--primary);
       color: #fff;
       border: none;
       border-radius: 8px;
-      font-size: .95rem;
+      font-size: 1rem;
       font-weight: 600;
       cursor: pointer;
       transition: background .15s;
-      white-space: nowrap;
+      min-height: 44px;       /* iOS minimum touch target */
     }
 
-    .btn-add:hover { background: var(--primary-hover); }
+    .btn-add:active { background: var(--primary-hover); }
+
+    /* Side-by-side on wider screens */
+    @media (min-width: 540px) {
+      body { padding: 2rem 1rem; }
+      header h1 { font-size: 1.75rem; }
+      .add-card { padding: 1.25rem; }
+      .input-row { flex-direction: row; }
+      .btn-add { width: auto; white-space: nowrap; }
+      .btn-add:hover { background: var(--primary-hover); }
+    }
 
     /* ── Filter Bar ── */
     .filter-bar {
@@ -121,7 +133,8 @@
     }
 
     .filter-tabs button {
-      padding: .35rem .8rem;
+      padding: .45rem .85rem;
+      min-height: 36px;
       border: 1.5px solid var(--border);
       border-radius: 6px;
       background: var(--surface);
@@ -130,6 +143,7 @@
       cursor: pointer;
       color: var(--muted);
       transition: all .15s;
+      -webkit-appearance: none;
     }
 
     .filter-tabs button.active {
@@ -139,19 +153,19 @@
     }
 
     .btn-clear {
-      padding: .35rem .8rem;
-      border: 1.5px solid var(--border);
+      padding: .45rem .85rem;
+      min-height: 36px;
+      border: 1.5px solid var(--danger);
       border-radius: 6px;
       background: var(--surface);
       font-size: .85rem;
       font-weight: 500;
       cursor: pointer;
       color: var(--danger);
-      border-color: var(--danger);
       transition: all .15s;
     }
 
-    .btn-clear:hover {
+    .btn-clear:active, .btn-clear:hover {
       background: var(--danger);
       color: #fff;
     }
@@ -187,12 +201,11 @@
       background: var(--surface);
       border-radius: var(--radius);
       box-shadow: var(--shadow);
-      padding: .9rem 1rem;
+      padding: .85rem 1rem;
       display: flex;
       align-items: flex-start;
       gap: .75rem;
       animation: fadeIn .2s ease;
-      transition: opacity .2s;
     }
 
     @keyframes fadeIn {
@@ -205,11 +218,11 @@
       opacity: .85;
     }
 
-    /* Custom checkbox */
+    /* Custom checkbox — 44px touch area via padding trick */
     .checkbox {
-      width: 20px;
-      height: 20px;
-      min-width: 20px;
+      width: 24px;
+      height: 24px;
+      min-width: 24px;
       border-radius: 50%;
       border: 2px solid var(--border);
       cursor: pointer;
@@ -228,8 +241,8 @@
     .checkbox::after {
       content: '';
       display: none;
-      width: 5px;
-      height: 9px;
+      width: 6px;
+      height: 10px;
       border: 2px solid #fff;
       border-top: none;
       border-left: none;
@@ -249,6 +262,7 @@
       align-items: center;
       gap: .5rem;
       line-height: 1.4;
+      flex-wrap: wrap;
     }
 
     .task-item.completed .task-title {
@@ -257,7 +271,7 @@
     }
 
     .priority-badge {
-      font-size: .7rem;
+      font-size: .68rem;
       font-weight: 700;
       padding: .15rem .45rem;
       border-radius: 4px;
@@ -273,46 +287,56 @@
     .task-meta {
       font-size: .78rem;
       color: var(--muted);
-      margin-top: .2rem;
+      margin-top: .25rem;
     }
 
     /* Task actions */
     .task-actions {
       display: flex;
-      gap: .35rem;
+      gap: .25rem;
       align-items: center;
     }
 
     .btn-icon {
-      width: 30px;
-      height: 30px;
+      width: 44px;
+      height: 44px;
       display: flex;
       align-items: center;
       justify-content: center;
       border: none;
-      border-radius: 6px;
+      border-radius: 8px;
       cursor: pointer;
-      font-size: 1rem;
+      font-size: 1.1rem;
       background: transparent;
       transition: background .15s;
       color: var(--muted);
     }
 
-    .btn-icon:hover { background: var(--bg); color: var(--text); }
-    .btn-icon.del:hover { background: #fee2e2; color: var(--danger); }
+    .btn-icon:active { background: #fee2e2; color: var(--danger); }
+
+    @media (min-width: 540px) {
+      .btn-icon { width: 34px; height: 34px; font-size: 1rem; }
+      .btn-icon:hover { background: var(--bg); color: var(--text); }
+      .btn-icon.del:hover { background: #fee2e2; color: var(--danger); }
+    }
 
     /* ── Priority selector ── */
     select {
-      padding: .35rem .5rem;
+      padding: .5rem .6rem;
       border: 1.5px solid var(--border);
       border-radius: 6px;
-      font-size: .85rem;
+      font-size: 1rem;        /* 16px — prevents iOS zoom */
       outline: none;
       background: var(--surface);
       cursor: pointer;
       color: var(--text);
-      margin-top: .6rem;
       transition: border-color .15s;
+      -webkit-appearance: none;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%236b7280' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right .6rem center;
+      padding-right: 2rem;
     }
 
     select:focus { border-color: var(--primary); }
@@ -321,22 +345,22 @@
       display: flex;
       align-items: center;
       gap: .75rem;
-      margin-top: .6rem;
+      margin-top: .75rem;
     }
 
     .add-extra label {
-      font-size: .82rem;
+      font-size: .85rem;
       color: var(--muted);
       font-weight: 500;
     }
 
     /* ── Progress ── */
     .progress-wrap {
-      margin-top: 1.75rem;
+      margin-top: 1.5rem;
       background: var(--surface);
       border-radius: var(--radius);
       box-shadow: var(--shadow);
-      padding: 1rem 1.25rem;
+      padding: 1rem 1.1rem;
     }
 
     .progress-header {
@@ -359,12 +383,6 @@
       background: linear-gradient(90deg, var(--primary), #818cf8);
       border-radius: 99px;
       transition: width .4s ease;
-    }
-
-    /* ── Responsive ── */
-    @media (max-width: 480px) {
-      .input-row { flex-direction: column; }
-      .btn-add { width: 100%; }
     }
   </style>
 </head>
