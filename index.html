@@ -227,6 +227,35 @@
       opacity: .85;
     }
 
+    .task-item.dragging { opacity: 0; }
+
+    /* Drag handle */
+    .drag-handle {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 20px;
+      width: 20px;
+      padding: 10px 0;
+      cursor: grab;
+      color: var(--border);
+      font-size: 1.1rem;
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+      transition: color .15s;
+    }
+
+    .drag-handle:active { cursor: grabbing; color: var(--muted); }
+
+    /* Drop placeholder */
+    .drag-placeholder {
+      border-radius: var(--radius);
+      background: rgba(79,70,229,.07);
+      border: 2px dashed var(--primary);
+      transition: height .1s;
+    }
+
     /* Custom checkbox — 44px touch area via padding trick */
     .checkbox {
       width: 24px;
@@ -557,6 +586,7 @@
 
       list.innerHTML = visible.map(t => `
         <div class="task-item ${t.done ? 'completed' : ''}" data-id="${t.id}">
+          ${filter === 'all' ? `<div class="drag-handle" title="Drag to reorder">⠿</div>` : ''}
           <div class="checkbox" onclick="toggleTask(${t.id})" title="${t.done ? 'Mark incomplete' : 'Mark complete'}"></div>
           <div class="task-body">
             <div class="task-title">
@@ -570,6 +600,8 @@
           </div>
         </div>
       `).join('');
+
+      if (filter === 'all') initDragHandles();
     }
 
     function renderProgress() {
@@ -606,6 +638,86 @@
     document.getElementById('task-input').addEventListener('keydown', e => {
       if (e.key === 'Enter') addTask();
     });
+
+    // ── Drag to reorder ──────────────────────────────────────
+    let drag = null;
+
+    function initDragHandles() {
+      document.querySelectorAll('.drag-handle').forEach(handle => {
+        handle.addEventListener('pointerdown', onDragStart, { passive: false });
+      });
+    }
+
+    function onDragStart(e) {
+      e.preventDefault();
+      const item = e.currentTarget.closest('.task-item');
+      if (!item) return;
+
+      const list  = document.getElementById('task-list');
+      const rect  = item.getBoundingClientRect();
+      const offsetY = e.clientY - rect.top;
+
+      // Ghost — floating clone
+      const ghost = item.cloneNode(true);
+      Object.assign(ghost.style, {
+        position: 'fixed', left: rect.left + 'px', top: rect.top + 'px',
+        width: rect.width + 'px', margin: '0', zIndex: '999',
+        opacity: '.9', pointerEvents: 'none',
+        boxShadow: '0 12px 32px rgba(0,0,0,.2)',
+        transform: 'scale(1.02)', borderRadius: 'var(--radius)',
+        transition: 'box-shadow .1s',
+      });
+      document.body.appendChild(ghost);
+
+      // Placeholder — keeps space in the list
+      const ph = document.createElement('div');
+      ph.className = 'drag-placeholder';
+      ph.style.height = rect.height + 'px';
+      item.after(ph);
+      item.classList.add('dragging');
+
+      drag = { item, ghost, ph, list, offsetY };
+
+      document.addEventListener('pointermove', onDragMove, { passive: false });
+      document.addEventListener('pointerup',   onDragEnd,  { once: true });
+    }
+
+    function onDragMove(e) {
+      if (!drag) return;
+      e.preventDefault();
+      const { ghost, ph, list, item, offsetY } = drag;
+
+      ghost.style.top = (e.clientY - offsetY) + 'px';
+
+      // Decide where placeholder should sit
+      const midY = e.clientY;
+      const siblings = [...list.children].filter(el => el !== ph && el !== item);
+
+      let after = null;
+      for (const sib of siblings) {
+        const r = sib.getBoundingClientRect();
+        if (midY > r.top + r.height / 2) after = sib;
+      }
+      if (after) after.after(ph); else list.prepend(ph);
+    }
+
+    function onDragEnd() {
+      if (!drag) return;
+      document.removeEventListener('pointermove', onDragMove);
+      const { item, ghost, ph, list } = drag;
+      drag = null;
+
+      ghost.remove();
+      item.classList.remove('dragging');
+      ph.replaceWith(item);
+
+      // Sync tasks array to new DOM order
+      const newOrder = [...list.querySelectorAll('.task-item')].map(el => +el.dataset.id);
+      tasks = newOrder.map(id => tasks.find(t => t.id === id)).filter(Boolean);
+      save();
+      renderStats();
+      renderProgress();
+    }
 
     // ── Prevent pinch-to-zoom on iOS (ignores user-scalable=no since iOS 10) ──
     document.addEventListener('touchmove', function (e) {
