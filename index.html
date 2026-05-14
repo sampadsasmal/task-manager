@@ -598,6 +598,18 @@
       if (e.key === 'Enter') addTask();
     });
 
+    // ── Prevent pinch-to-zoom on iOS (ignores user-scalable=no since iOS 10) ──
+    document.addEventListener('touchmove', function (e) {
+      if (e.touches.length > 1) e.preventDefault();
+    }, { passive: false });
+
+    let lastTap = 0;
+    document.addEventListener('touchend', function (e) {
+      const now = Date.now();
+      if (now - lastTap < 300) e.preventDefault();
+      lastTap = now;
+    }, { passive: false });
+
     // ── Init ─────────────────────────────────────────────────
     updateDateDisplay();
     load();
