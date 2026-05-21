@@ -229,6 +229,48 @@
 
     .task-item.dragging { opacity: 0; }
 
+    /* ── Carried-over badge ── */
+    .carried-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: .2rem;
+      font-size: .68rem;
+      font-weight: 600;
+      color: #7c3aed;
+      background: #ede9fe;
+      border-radius: 4px;
+      padding: .1rem .4rem;
+      white-space: nowrap;
+    }
+
+    /* ── Date group header (Completed view) ── */
+    .date-header {
+      font-size: .72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .07em;
+      color: var(--muted);
+      padding: .9rem .25rem .35rem;
+      display: flex;
+      align-items: center;
+      gap: .6rem;
+    }
+
+    .date-header:first-child { padding-top: 0; }
+
+    .date-header::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+
+    /* ── Carried stats pill ── */
+    .stat-carried {
+      color: #7c3aed;
+      font-weight: 600;
+    }
+
     /* Drag handle */
     .drag-handle {
       display: flex;
@@ -480,6 +522,37 @@
     let tasks = [];
     let filter = 'all';
 
+    // ── Date helpers ─────────────────────────────────────────
+    function getToday() {
+      return new Date().toISOString().slice(0, 10);
+    }
+
+    function formatDateLabel(dateStr) {
+      const today     = getToday();
+      const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+      if (dateStr === today)     return 'Today';
+      if (dateStr === yesterday) return 'Yesterday';
+      return new Date(dateStr + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    }
+
+    // ── Carry forward pending tasks from past days ────────────
+    function carryForwardTasks() {
+      const today = getToday();
+      let changed = false;
+      tasks.forEach(t => {
+        if (!t.date) {
+          t.date = t.createdAt ? t.createdAt.slice(0, 10) : today;
+          changed = true;
+        }
+        if (!t.done && t.date < today) {
+          if (!t.carriedFrom) t.carriedFrom = t.date;
+          t.date = today;
+          changed = true;
+        }
+      });
+      if (changed) save();
+    }
+
     // ── Persistence ──────────────────────────────────────────
     function load() {
       try {
@@ -487,6 +560,7 @@
       } catch {
         tasks = [];
       }
+      carryForwardTasks();
     }
 
     function save() {
@@ -506,6 +580,7 @@
         title,
         priority,
         done: false,
+        date: getToday(),
         createdAt: new Date().toISOString(),
       });
 
@@ -524,7 +599,13 @@
 
     function toggleTask(id) {
       const t = tasks.find(t => t.id === id);
-      if (t) { t.done = !t.done; save(); render(); }
+      if (t) {
+        t.done = !t.done;
+        // Move completed task to today so it appears in today's Completed group
+        if (t.done) t.date = getToday();
+        save();
+        render();
+      }
     }
 
     function deleteTask(id) {
@@ -563,12 +644,14 @@
     }
 
     function renderStats() {
-      const total = tasks.length;
-      const done  = tasks.filter(t => t.done).length;
-      const el    = document.getElementById('stats');
-      el.innerHTML = total === 0
-        ? 'No tasks yet — add one above!'
-        : `<span>${done}</span> of <span>${total}</span> tasks completed`;
+      const total   = tasks.length;
+      const done    = tasks.filter(t => t.done).length;
+      const carried = tasks.filter(t => t.carriedFrom && !t.done).length;
+      const el      = document.getElementById('stats');
+      if (total === 0) { el.innerHTML = 'No tasks yet — add one above!'; return; }
+      let html = `<span>${done}</span> of <span>${total}</span> tasks completed`;
+      if (carried > 0) html += ` &nbsp;·&nbsp; <span class="stat-carried">↩ ${carried} carried over</span>`;
+      el.innerHTML = html;
     }
 
     function renderList() {
@@ -584,24 +667,45 @@
         return;
       }
 
-      list.innerHTML = visible.map(t => `
+      if (filter === 'completed') {
+        // Group completed tasks by date, newest first
+        const groups = {};
+        visible.forEach(t => {
+          const d = t.date || getToday();
+          if (!groups[d]) groups[d] = [];
+          groups[d].push(t);
+        });
+        const dates = Object.keys(groups).sort((a, b) => b.localeCompare(a));
+        list.innerHTML = dates.map(date => `
+          <div class="date-header">${formatDateLabel(date)}</div>
+          ${groups[date].map(t => taskHTML(t)).join('')}
+        `).join('');
+      } else {
+        list.innerHTML = visible.map(t => taskHTML(t)).join('');
+        if (filter === 'all') initDragHandles();
+      }
+    }
+
+    function taskHTML(t) {
+      const showDrag = filter === 'all';
+      const meta = t.carriedFrom
+        ? `<span class="carried-badge">↩ From ${formatDateLabel(t.carriedFrom)}</span>`
+        : relativeTime(t.createdAt);
+      return `
         <div class="task-item ${t.done ? 'completed' : ''}" data-id="${t.id}">
-          ${filter === 'all' ? `<div class="drag-handle" title="Drag to reorder">⠿</div>` : ''}
+          ${showDrag ? `<div class="drag-handle" title="Drag to reorder">⠿</div>` : ''}
           <div class="checkbox" onclick="toggleTask(${t.id})" title="${t.done ? 'Mark incomplete' : 'Mark complete'}"></div>
           <div class="task-body">
             <div class="task-title">
               ${escHtml(t.title)}
               <span class="priority-badge ${t.priority}">${t.priority}</span>
             </div>
-            <div class="task-meta">${relativeTime(t.createdAt)}</div>
+            <div class="task-meta">${meta}</div>
           </div>
           <div class="task-actions">
             <button class="btn-icon del" onclick="deleteTask(${t.id})" title="Delete task">🗑</button>
           </div>
-        </div>
-      `).join('');
-
-      if (filter === 'all') initDragHandles();
+        </div>`;
     }
 
     function renderProgress() {
