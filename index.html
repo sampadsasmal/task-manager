@@ -400,38 +400,65 @@
       .btn-icon.del:hover { background: #fee2e2; color: var(--danger); }
     }
 
-    /* ── Priority selector ── */
-    select {
+    /* ── Form controls (select + date input) ── */
+    select, input[type="date"] {
       padding: .5rem .6rem;
       border: 1.5px solid var(--border);
       border-radius: 6px;
-      font-size: 1rem;        /* 16px — prevents iOS zoom */
+      font-size: 1rem;
       outline: none;
       background: var(--surface);
-      cursor: pointer;
       color: var(--text);
       transition: border-color .15s;
+      cursor: pointer;
       -webkit-appearance: none;
       appearance: none;
+    }
+
+    select {
       background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%236b7280' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
       background-repeat: no-repeat;
       background-position: right .6rem center;
       padding-right: 2rem;
     }
 
-    select:focus { border-color: var(--primary); }
+    input[type="date"] { padding-right: .6rem; }
+
+    select:focus, input[type="date"]:focus { border-color: var(--primary); }
 
     .add-extra {
       display: flex;
       align-items: center;
-      gap: .75rem;
+      gap: .6rem;
       margin-top: .75rem;
+      flex-wrap: wrap;
     }
 
     .add-extra label {
       font-size: .85rem;
       color: var(--muted);
       font-weight: 500;
+    }
+
+    .add-extra .divider {
+      width: 1px;
+      height: 20px;
+      background: var(--border);
+      margin: 0 .1rem;
+    }
+
+    /* ── Scheduled badge (future tasks) ── */
+    .scheduled-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: .2rem;
+      font-size: .68rem;
+      font-weight: 600;
+      color: #0369a1;
+      background: #e0f2fe;
+      border-radius: 4px;
+      padding: .1rem .4rem;
+      white-space: nowrap;
     }
 
     /* ── Progress ── */
@@ -487,6 +514,9 @@
           <option value="high">High</option>
           <option value="low">Low</option>
         </select>
+        <div class="divider"></div>
+        <label for="date-input">Date:</label>
+        <input type="date" id="date-input" />
       </div>
     </div>
 
@@ -574,18 +604,20 @@
       if (!title) { input.focus(); return; }
 
       const priority = document.getElementById('priority-select').value;
+      const date     = document.getElementById('date-input').value || getToday();
 
       tasks.unshift({
         id: Date.now(),
         title,
         priority,
         done: false,
-        date: getToday(),
+        date,
         createdAt: new Date().toISOString(),
       });
 
       save();
       input.value = '';
+      document.getElementById('date-input').value = getToday();
       input.blur();
 
       // Always switch to "All" so the new task is immediately visible
@@ -667,32 +699,34 @@
         return;
       }
 
-      if (filter === 'completed') {
-        // Group completed tasks by date, newest first
-        const groups = {};
-        visible.forEach(t => {
-          const d = t.date || getToday();
-          if (!groups[d]) groups[d] = [];
-          groups[d].push(t);
-        });
-        const dates = Object.keys(groups).sort((a, b) => b.localeCompare(a));
-        list.innerHTML = dates.map(date => `
-          <div class="date-header">${formatDateLabel(date)}</div>
-          ${groups[date].map(t => taskHTML(t)).join('')}
-        `).join('');
-      } else {
-        list.innerHTML = visible.map(t => taskHTML(t)).join('');
-        if (filter === 'all') initDragHandles();
-      }
+      const today = getToday();
+      const dates  = groupByDate(visible, filter);
+      const multi  = dates.length > 1;
+
+      // Drag only allowed in All filter when all visible tasks are on today
+      const allToday  = visible.every(t => (t.date || today) === today);
+      const allowDrag = filter === 'all' && allToday;
+
+      list.innerHTML = dates.map(({ date, items }) => `
+        ${multi ? `<div class="date-header">${formatDateLabel(date)}</div>` : ''}
+        ${items.map(t => taskHTML(t, allowDrag)).join('')}
+      `).join('');
+
+      if (allowDrag) initDragHandles();
     }
 
-    function taskHTML(t) {
-      const showDrag = filter === 'all';
-      const meta = t.carriedFrom
-        ? `<span class="carried-badge">↩ From ${formatDateLabel(t.carriedFrom)}</span>`
-        : relativeTime(t.createdAt);
+    function taskHTML(t, showDrag) {
+      const today = getToday();
+      let meta;
+      if (!t.done && t.date > today) {
+        meta = `<span class="scheduled-badge">📅 ${formatDateLabel(t.date)}</span>`;
+      } else if (t.carriedFrom) {
+        meta = `<span class="carried-badge">↩ From ${formatDateLabel(t.carriedFrom)}</span>`;
+      } else {
+        meta = relativeTime(t.createdAt);
+      }
       return `
-        <div class="task-item ${t.done ? 'completed' : ''}" data-id="${t.id}">
+        <div class="task-item ${t.done ? 'completed' : ''}" data-id="${t.id}" data-date="${t.date || today}">
           ${showDrag ? `<div class="drag-handle" title="Drag to reorder">⠿</div>` : ''}
           <div class="checkbox" onclick="toggleTask(${t.id})" title="${t.done ? 'Mark incomplete' : 'Mark complete'}"></div>
           <div class="task-body">
@@ -714,6 +748,30 @@
       const pct   = total === 0 ? 0 : Math.round((done / total) * 100);
       document.getElementById('progress-bar').style.width = pct + '%';
       document.getElementById('progress-pct').textContent = pct + '%';
+    }
+
+    // ── Date grouping ─────────────────────────────────────────
+    function groupByDate(taskList, view) {
+      const today = getToday();
+      const map   = {};
+      taskList.forEach(t => {
+        const d = t.date || today;
+        if (!map[d]) map[d] = [];
+        map[d].push(t);
+      });
+      // Sort: future dates asc → today → past dates desc
+      const sorted = Object.keys(map).sort((a, b) => {
+        const af = a > today, bf = b > today;
+        const ap = a < today, bp = b < today;
+        if (a === today) return -1;
+        if (b === today) return 1;
+        if (af && bf) return a.localeCompare(b);   // both future: asc
+        if (ap && bp) return b.localeCompare(a);   // both past:   desc
+        return af ? -1 : 1;                        // future before past
+      });
+      // Completed view: most recent first
+      if (view === 'completed') sorted.sort((a, b) => b.localeCompare(a));
+      return sorted.map(date => ({ date, items: map[date] }));
     }
 
     // ── Helpers ──────────────────────────────────────────────
@@ -841,6 +899,8 @@
     }
 
     // ── Init ─────────────────────────────────────────────────
+    document.getElementById('date-input').value = getToday();
+    document.getElementById('date-input').min   = getToday();
     updateDateDisplay();
     load();
     render();
